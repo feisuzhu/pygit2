@@ -205,6 +205,7 @@ typedef struct {
     PyObject *credentials;
     PyObject *transfer_progress;
     PyObject *update_tips;
+    PyThreadState *tstate;
 } Remote;
 
 /* git_refspec */

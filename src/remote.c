@@ -139,8 +139,10 @@ progress_cb(const char *str, int len, void *data)
     if (remote->progress == NULL)
         return 0;
 
+    PyEval_RestoreThread(remote->tstate);
     if (!PyCallable_Check(remote->progress)) {
         PyErr_SetString(PyExc_TypeError, "progress callback is not callable");
+        remote->tstate = PyEval_SaveThread();
         return -1;
     }
 
@@ -148,11 +150,14 @@ progress_cb(const char *str, int len, void *data)
     ret = PyObject_CallObject(remote->progress, arglist);
     Py_DECREF(arglist);
 
-    if (!ret)
+    if (!ret) {
+        remote->tstate = PyEval_SaveThread();
         return -1;
+    }
 
     Py_DECREF(ret);
 
+    remote->tstate = PyEval_SaveThread();
     return 0;
 }
 
@@ -161,7 +166,10 @@ credentials_cb(git_cred **out, const char *url, const char *username_from_url, u
 {
     Remote *remote = (Remote *) data;
 
-    return callable_to_credentials(out, url, username_from_url, allowed_types, remote->credentials);
+    PyEval_RestoreThread(remote->tstate);
+    int v = callable_to_credentials(out, url, username_from_url, allowed_types, remote->credentials);
+    remote->tstate = PyEval_SaveThread();
+    return v;
 }
 
 static int
@@ -173,21 +181,28 @@ transfer_progress_cb(const git_transfer_progress *stats, void *data)
     if (remote->transfer_progress == NULL)
         return 0;
 
+    PyEval_RestoreThread(remote->tstate);
     if (!PyCallable_Check(remote->transfer_progress)) {
         PyErr_SetString(PyExc_TypeError, "transfer progress callback is not callable");
+        remote->tstate = PyEval_SaveThread();
         return -1;
     }
 
     py_stats = wrap_transfer_progress(stats);
-    if (!py_stats)
+    if (!py_stats) {
+        remote->tstate = PyEval_SaveThread();
         return -1;
+    }
 
     ret = PyObject_CallFunctionObjArgs(remote->transfer_progress, py_stats, NULL);
     Py_DECREF(py_stats);
-    if (!ret)
+    if (!ret) {
+        remote->tstate = PyEval_SaveThread();
         return -1;
+    }
 
     Py_DECREF(ret);
+    remote->tstate = PyEval_SaveThread();
 
     return 0;
 }
@@ -202,8 +217,10 @@ update_tips_cb(const char *refname, const git_oid *a, const git_oid *b, void *da
     if (remote->update_tips == NULL)
         return 0;
 
+    PyEval_RestoreThread(remote->tstate);
     if (!PyCallable_Check(remote->update_tips)) {
         PyErr_SetString(PyExc_TypeError, "update tips callback is not callable");
+        remote->tstate = PyEval_SaveThread();
         return -1;
     }
 
@@ -215,10 +232,13 @@ update_tips_cb(const char *refname, const git_oid *a, const git_oid *b, void *da
     Py_DECREF(old);
     Py_DECREF(new);
 
-    if (!ret)
+    if (!ret) {
+        remote->tstate = PyEval_SaveThread();
         return -1;
+    }
 
     Py_DECREF(ret);
+    remote->tstate = PyEval_SaveThread();
 
     return 0;
 }
@@ -467,7 +487,10 @@ Remote_fetch(Remote *self, PyObject *args)
     int err;
 
     PyErr_Clear();
+    self->tstate = PyEval_SaveThread();
     err = git_remote_fetch(self->remote);
+    PyEval_RestoreThread(self->tstate);
+    self->tstate = NULL;
     /*
      * XXX: We should be checking for GIT_EUSER, but on v0.20, this does not
      * make it all the way to us for update_tips
