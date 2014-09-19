@@ -43,8 +43,9 @@ get_search_path(long level)
     int error;
 
     do {
+        char *tmp;
         len *= 2;
-        char *tmp = realloc(buf, len);
+        tmp = realloc(buf, len);
         if (!tmp) {
             free(buf);
             PyErr_NoMemory();
