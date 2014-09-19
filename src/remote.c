@@ -165,9 +165,10 @@ static int
 credentials_cb(git_cred **out, const char *url, const char *username_from_url, unsigned int allowed_types, void *data)
 {
     Remote *remote = (Remote *) data;
+    int v;
 
     PyEval_RestoreThread(remote->tstate);
-    int v = callable_to_credentials(out, url, username_from_url, allowed_types, remote->credentials);
+    v = callable_to_credentials(out, url, username_from_url, allowed_types, remote->credentials);
     remote->tstate = PyEval_SaveThread();
     return v;
 }
